@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/go-redis/redis/v9"
 	"github.com/parrahex/spool/internal/jobs"
 	"github.com/redis/go-redis/v9"
 )
@@ -26,7 +25,7 @@ func (s *Store) Save(ctx context.Context, j *jobs.Job) error {
 	if err != nil {
 		return err
 	}
-	return s.client.Set(ctx, j.ID, data, 0).Err()
+	return s.client.Set(ctx, "spool:job:"+j.ID, data, 0).Err()
 }
 
 func (s *Store) Get(ctx context.Context, id string) (*jobs.Job, error) {

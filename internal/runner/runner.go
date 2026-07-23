@@ -16,6 +16,7 @@ func Run(ctx context.Context, job *jobs.Job) {
 		fail(job, "Image not found")
 		return
 	}
+	runDocker(ctx, job, dockerArgs(job))
 }
 
 func dockerArgs(job *jobs.Job) []string {

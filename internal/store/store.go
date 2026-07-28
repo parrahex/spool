@@ -39,3 +39,21 @@ func (s *Store) Get(ctx context.Context, id string) (*jobs.Job, error) {
 	}
 	return &j, nil
 }
+
+func (s *Store) ListAll(ctx context.Context) ([]*jobs.Job, error) {
+	iter := s.client.Scan(ctx, 0, "spool:job:*", 0).Iterator()
+	var jobsList []*jobs.Job
+	for iter.Next(ctx) {
+		key := iter.Val()
+		data, err := s.client.Get(ctx, key).Bytes()
+		if err != nil {
+			continue
+		}
+		var j jobs.Job
+		if err := json.Unmarshal(data, &j); err != nil {
+			continue
+		}
+		jobsList = append(jobsList, &j)
+	}
+	return jobsList, iter.Err()
+}

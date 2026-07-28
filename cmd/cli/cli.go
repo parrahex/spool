@@ -17,11 +17,16 @@ import (
 func runCmd() *cobra.Command {
 	var image string
 	var path string
+	var timeout int
 
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run a job",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return fmt.Errorf("command is required")
+			}
+
 			addr := viper.GetString("redis_addr")
 			q := queue.NewQueue(addr)
 			s := store.NewStore(addr)
@@ -40,6 +45,7 @@ func runCmd() *cobra.Command {
 				Path:      path,
 				Command:   args,
 				Status:    jobs.StatusPending,
+				Timeout:   time.Duration(timeout) * time.Second,
 				CreatedAt: time.Now(),
 				UpdatedAt: time.Now(),
 			}
@@ -59,6 +65,7 @@ func runCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&image, "image", "", "Docker image")
 	cmd.Flags().StringVar(&path, "path", "", "Path to the code directory")
+	cmd.Flags().IntVar(&timeout, "timeout", 600, "Execution timeout in seconds")
 	cmd.MarkFlagRequired("image")
 
 	return cmd

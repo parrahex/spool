@@ -32,3 +32,7 @@ func (q *Queue) Dequeue(ctx context.Context) (string, error) {
 	}
 	return result[1], nil
 }
+
+func (q *Queue) Requeue(ctx context.Context, jobID string) error {
+	return q.client.LPush(ctx, "spool:queue", jobID).Err()
+}

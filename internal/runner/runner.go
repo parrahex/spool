@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/parrahex/spool/internal/artifacts"
 	"github.com/parrahex/spool/internal/jobs"
 )
 
@@ -16,11 +17,23 @@ func Run(ctx context.Context, job *jobs.Job) {
 		fail(job, "Image not found")
 		return
 	}
-	runDocker(ctx, job, dockerArgs(job))
+
+	workspace, cleanup, err := artifacts.Workspace(job.ID, job.Path)
+	if err != nil {
+		fail(job, err.Error())
+		return
+	}
+	defer cleanup()
+
+	runDocker(ctx, job, dockerArgs(job, workspace))
 }
 
-func dockerArgs(job *jobs.Job) []string {
-	args := []string{"run", "--rm", job.Image}
+func dockerArgs(job *jobs.Job, workspace string) []string {
+	args := []string{"run", "--rm"}
+	if workspace != "" {
+		args = append(args, "--volume", workspace+":/app:ro", "--workdir", "/app")
+	}
+	args = append(args, job.Image)
 	return append(args, job.Command...)
 }
 

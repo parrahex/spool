@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,6 +16,7 @@ import (
 
 func runCmd() *cobra.Command {
 	var image string
+	var path string
 
 	cmd := &cobra.Command{
 		Use:   "run",
@@ -24,9 +26,18 @@ func runCmd() *cobra.Command {
 			q := queue.NewQueue(addr)
 			s := store.NewStore(addr)
 
+			if path != "" {
+				absolutePath, err := filepath.Abs(path)
+				if err != nil {
+					return err
+				}
+				path = absolutePath
+			}
+
 			job := &jobs.Job{
 				ID:        uuid.NewString(),
 				Image:     image,
+				Path:      path,
 				Command:   args,
 				Status:    jobs.StatusPending,
 				CreatedAt: time.Now(),
@@ -47,6 +58,7 @@ func runCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&image, "image", "", "Docker image")
+	cmd.Flags().StringVar(&path, "path", "", "Path to the code directory")
 	cmd.MarkFlagRequired("image")
 
 	return cmd

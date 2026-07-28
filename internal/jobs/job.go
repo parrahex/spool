@@ -5,6 +5,7 @@ import "time"
 type Job struct {
 	ID        string
 	Image     string
+	Path      string
 	Command   []string
 	Status    string // pending, running, completed, failed, etc
 	ExitCode  int

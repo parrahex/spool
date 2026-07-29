@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="mylogo.png" alt="Spool" width="200"/>
+  <img src="mylogo.png" alt="Spool" width="350"/>
 </p>
 
 <h1 align="center">Spool</h1>

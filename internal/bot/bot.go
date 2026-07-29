@@ -36,7 +36,12 @@ func (b *Bot) Run(ctx context.Context) error {
 func (b *Bot) handle(ctx context.Context, msg platform.Message) {
 	image, timeout, command, err := parseArgs(msg.Text)
 	if err != nil {
-		b.p.Reply(ctx, msg, "usage: --image <name> [--timeout <sec>] <command>")
+		b.p.Reply(ctx, msg, "usage: `@Spool <image> [command]`")
+		return
+	}
+
+	if image == "" {
+		b.p.Reply(ctx, msg, "image is required")
 		return
 	}
 
@@ -47,6 +52,11 @@ func (b *Bot) handle(ctx context.Context, msg platform.Message) {
 			b.p.Reply(ctx, msg, "file download failed: "+err.Error())
 			return
 		}
+	}
+
+	if len(command) == 0 && filePath == "" {
+		b.p.Reply(ctx, msg, "command or file is required")
+		return
 	}
 
 	jobID, err := b.submitJob(ctx, image, command, filePath, timeout)
@@ -62,34 +72,25 @@ func (b *Bot) handle(ctx context.Context, msg platform.Message) {
 func parseArgs(text string) (image string, timeout int, command []string, err error) {
 	timeout = 600
 	fields := strings.Fields(text)
-	for i := 0; i < len(fields); i++ {
-		switch fields[i] {
-		case "--image":
-			if i+1 >= len(fields) {
-				return "", 0, nil, fmt.Errorf("--image needs a value")
+	if len(fields) == 0 {
+		return "", 0, nil, fmt.Errorf("empty message")
+	}
+
+	image = fields[0]
+	if len(fields) > 1 {
+		command = fields[1:]
+	}
+
+	for i := 0; i < len(command); i++ {
+		if command[i] == "--timeout" && i+1 < len(command) {
+			if v, e := strconv.Atoi(command[i+1]); e == nil {
+				timeout = v
 			}
-			image = fields[i+1]
-			i++
-		case "--timeout":
-			if i+1 >= len(fields) {
-				return "", 0, nil, fmt.Errorf("--timeout needs a value")
-			}
-			v, e := strconv.Atoi(fields[i+1])
-			if e != nil {
-				return "", 0, nil, fmt.Errorf("--timeout must be a number")
-			}
-			timeout = v
-			i++
-		default:
-			command = append(command, fields[i])
+			command = append(command[:i], command[i+2:]...)
+			break
 		}
 	}
-	if image == "" {
-		return "", 0, nil, fmt.Errorf("--image is required")
-	}
-	if len(command) == 0 {
-		return "", 0, nil, fmt.Errorf("command is required")
-	}
+
 	return image, timeout, command, nil
 }
 

@@ -3,7 +3,6 @@ package runner
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os/exec"
 	"strings"
 	"time"
@@ -15,8 +14,8 @@ import (
 func Run(ctx context.Context, job *jobs.Job) {
 	job.MarkRunning(time.Now())
 
-	if err := validateJob(job); err != nil {
-		job.MarkFailed(err.Error())
+	if job.Image == "" {
+		job.MarkFailed("image not specified")
 		return
 	}
 
@@ -27,18 +26,15 @@ func Run(ctx context.Context, job *jobs.Job) {
 	}
 	defer cleanup()
 
+	if len(job.Command) == 0 && job.Path == "" {
+		job.MarkFailed("command or file is required")
+		return
+	}
+
 	runCtx, cancel := executionContext(ctx, job.Timeout)
 	defer cancel()
 
-	containerID, err := createContainer(runCtx, job, workspace)
-	if err != nil {
-		job.MarkFailed(err.Error())
-		return
-	}
-	job.ContainerID = containerID
-	defer cleanupContainer(containerID)
-
-	output, err := startContainer(runCtx, containerID)
+	output, err := runDocker(runCtx, job, workspace)
 	if err != nil {
 		job.MarkFailed(err.Error())
 		job.ExitCode = exitCode(err)
@@ -49,16 +45,6 @@ func Run(ctx context.Context, job *jobs.Job) {
 	job.MarkCompleted(0, output)
 }
 
-func validateJob(job *jobs.Job) error {
-	if job.Image == "" {
-		return errors.New("image not specified")
-	}
-	if len(job.Command) == 0 {
-		return errors.New("command not specified")
-	}
-	return nil
-}
-
 func executionContext(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
 	if timeout <= 0 {
 		timeout = jobs.DefaultTimeout
@@ -66,35 +52,20 @@ func executionContext(ctx context.Context, timeout time.Duration) (context.Conte
 	return context.WithTimeout(ctx, timeout)
 }
 
-func createContainer(ctx context.Context, job *jobs.Job, workspace string) (string, error) {
-	args := dockerCreateArgs(job, workspace)
-	out, err := exec.CommandContext(ctx, "docker", args...).Output()
-	if err != nil {
-		return "", fmt.Errorf("docker create: %w", err)
-	}
-	return strings.TrimSpace(string(out)), nil
-}
-
-func dockerCreateArgs(job *jobs.Job, workspace string) []string {
-	args := []string{"create"}
-	if workspace != "" {
-		args = append(args, "--volume", workspace+":/app:ro", "--workdir", "/app")
-	}
-	args = append(args, "--label", "spool-job-id="+job.ID)
-	args = append(args, job.Image)
-	return append(args, job.Command...)
-}
-
-func startContainer(ctx context.Context, containerID string) (string, error) {
-	out, err := exec.CommandContext(ctx, "docker", "start", "--attach", containerID).CombinedOutput()
+func runDocker(ctx context.Context, job *jobs.Job, workspace string) (string, error) {
+	args := dockerArgs(job, workspace)
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
 
-func cleanupContainer(containerID string) {
-	if containerID == "" {
-		return
+func dockerArgs(job *jobs.Job, workspace string) []string {
+	args := []string{"run", "--rm", "--label", "spool-job-id=" + job.ID}
+	if workspace != "" {
+		args = append(args, "--volume", workspace+":/app:ro", "--workdir", "/app")
 	}
-	exec.Command("docker", "rm", "-f", containerID).Run()
+	args = append(args, job.Image)
+	return append(args, job.Command...)
 }
 
 func CleanupOrphaned(jobID string) {

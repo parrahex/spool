@@ -43,7 +43,6 @@ func (s *Slack) dispatch(ctx context.Context, handler HandlerFunc) {
 		if !ok {
 			continue
 		}
-		fmt.Printf("[debug] from=%s channel=%s text=%q files=%d\n", msg.Sender, msg.Channel, msg.Text, len(msg.Files))
 		go handler(ctx, msg)
 	}
 }
@@ -59,18 +58,15 @@ func extractMessage(evt socketmode.Event) (Message, bool) {
 		if ev.BotID != "" {
 			return Message{}, false
 		}
+		if ev.ChannelType != "im" {
+			return Message{}, false
+		}
 		if ev.SubType != "" && ev.SubType != "file_share" {
 			return Message{}, false
 		}
 
-		isDM := ev.ChannelType == "im"
-		isMention := strings.Contains(ev.Text, "<@")
-		if !isDM && !isMention {
-			return Message{}, false
-		}
-
 		msg := Message{
-			Text:    stripMention(ev.Text),
+			Text:    ev.Text,
 			Channel: ev.Channel,
 			Thread:  ev.TimeStamp,
 			Sender:  ev.User,
@@ -94,6 +90,9 @@ func extractMessage(evt socketmode.Event) (Message, bool) {
 		}
 		if ev.ThreadTimeStamp != "" {
 			msg.Thread = ev.ThreadTimeStamp
+		}
+		for _, f := range ev.Files {
+			msg.Files = append(msg.Files, File{ID: f.ID, Name: f.Name})
 		}
 		return msg, true
 	}

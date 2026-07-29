@@ -47,7 +47,7 @@ func (b *Bot) handle(ctx context.Context, msg platform.Message) {
 
 	var filePath string
 	if len(msg.Files) > 0 {
-		filePath, err = b.saveFile(ctx, msg, msg.Files[0])
+		filePath, err = b.saveFiles(ctx, msg)
 		if err != nil {
 			b.p.Reply(ctx, msg, "file download failed: "+err.Error())
 			return
@@ -94,17 +94,19 @@ func parseArgs(text string) (image string, timeout int, command []string, err er
 	return image, timeout, command, nil
 }
 
-func (b *Bot) saveFile(ctx context.Context, msg platform.Message, f platform.File) (string, error) {
+func (b *Bot) saveFiles(ctx context.Context, msg platform.Message) (string, error) {
 	dir, err := os.MkdirTemp("", "spool-bot-")
 	if err != nil {
 		return "", err
 	}
-	dest := filepath.Join(dir, f.Name)
-	if err := b.p.Download(ctx, f, dest); err != nil {
-		os.RemoveAll(dir)
-		return "", err
+	for _, f := range msg.Files {
+		dest := filepath.Join(dir, f.Name)
+		if err := b.p.Download(ctx, f, dest); err != nil {
+			os.RemoveAll(dir)
+			return "", err
+		}
 	}
-	return dest, nil
+	return dir, nil
 }
 
 func (b *Bot) submitJob(ctx context.Context, image string, command []string, path string, timeout int) (string, error) {

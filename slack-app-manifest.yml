@@ -9,7 +9,6 @@ oauth_config:
   scopes:
     bot:
       - chat:write
-      - channels:history
       - im:history
       - im:read
       - files:read
@@ -18,6 +17,5 @@ settings:
   event_subscriptions:
     bot_events:
       - message.im
-      - message.channels
       - app_mention
   socket_mode_enabled: true

@@ -92,6 +92,10 @@ func nextJob(ctx context.Context, q *queue.Queue, s *store.Store) *jobs.Job {
 		fmt.Println("Get Job error:", err)
 		return nil
 	}
+	if job.IsCancelled() {
+		fmt.Println("skipping cancelled job:", job.ID)
+		return nil
+	}
 	return job
 }
 
@@ -123,6 +127,15 @@ func handlePanic(job *jobs.Job, s *store.Store) {
 
 func acquireLease(ctx context.Context, s *store.Store, q *queue.Queue, job *jobs.Job) bool {
 	job.MarkLeased(time.Now(), leaseInterval*2)
+
+	if job.ExhaustedRetries() {
+		job.MarkFailed(fmt.Sprintf("exhausted %d retries", job.MaxRetries))
+		if err := s.Save(ctx, job); err != nil {
+			fmt.Println("retry limit save error:", err)
+		}
+		fmt.Println("job exhausted retries:", job.ID)
+		return false
+	}
 
 	if err := s.Save(ctx, job); err != nil {
 		fmt.Println("lease save error:", err)

@@ -12,6 +12,7 @@ type Job struct {
 	Output      string        `json:"output"`
 	Error       string        `json:"error"`
 	Attempt     int           `json:"attempt"`
+	MaxRetries  int           `json:"max_retries"`
 	Timeout     time.Duration `json:"timeout"`
 	ContainerID string        `json:"container_id"`
 	CreatedAt   time.Time     `json:"created_at"`
@@ -27,12 +28,20 @@ const (
 	StatusLeased    = "leased"
 	StatusCompleted = "completed"
 	StatusFailed    = "failed"
+	StatusCancelled = "cancelled"
 )
 
-const DefaultTimeout = 10 * time.Minute
+const (
+	DefaultTimeout  = 10 * time.Minute
+	DefaultRetries  = 3
+)
 
 func (j *Job) IsExpired(now time.Time) bool {
 	return (j.Status == StatusRunning || j.Status == StatusLeased) && now.After(j.LeaseUntil)
+}
+
+func (j *Job) IsCancelled() bool {
+	return j.Status == StatusCancelled
 }
 
 func (j *Job) MarkCompleted(exitCode int, output string) {
@@ -62,4 +71,15 @@ func (j *Job) MarkRunning(now time.Time) {
 	j.Status = StatusRunning
 	j.StartedAt = now
 	j.UpdatedAt = now
+}
+
+func (j *Job) MarkCancelled() {
+	j.Status = StatusCancelled
+	j.FinishedAt = time.Now()
+	j.UpdatedAt = j.FinishedAt
+	j.Error = "cancelled by user"
+}
+
+func (j *Job) ExhaustedRetries() bool {
+	return j.Attempt >= j.MaxRetries
 }

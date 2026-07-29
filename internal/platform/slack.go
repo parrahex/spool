@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
@@ -52,56 +51,28 @@ func extractMessage(evt socketmode.Event) (Message, bool) {
 	if !ok || apiEvt.Type != slackevents.CallbackEvent {
 		return Message{}, false
 	}
-
-	switch ev := apiEvt.InnerEvent.Data.(type) {
-	case *slackevents.MessageEvent:
-		if ev.BotID != "" {
-			return Message{}, false
-		}
-		if ev.SubType != "" && ev.SubType != "file_share" {
-			return Message{}, false
-		}
-		msg := Message{
-			Text:    ev.Text,
-			Channel: ev.Channel,
-			Thread:  ev.TimeStamp,
-			Sender:  ev.User,
-		}
-		if ev.ThreadTimeStamp != "" {
-			msg.Thread = ev.ThreadTimeStamp
-		}
-		if ev.Message != nil {
-			for _, f := range ev.Message.Files {
-				msg.Files = append(msg.Files, File{ID: f.ID, Name: f.Name})
-			}
-		}
-		return msg, true
-
-	case *slackevents.AppMentionEvent:
-		msg := Message{
-			Text:    stripMention(ev.Text),
-			Channel: ev.Channel,
-			Thread:  ev.TimeStamp,
-			Sender:  ev.User,
-		}
-		if ev.ThreadTimeStamp != "" {
-			msg.Thread = ev.ThreadTimeStamp
-		}
-		return msg, true
+	msgEvt, ok := apiEvt.InnerEvent.Data.(*slackevents.MessageEvent)
+	if !ok || msgEvt.BotID != "" {
+		return Message{}, false
 	}
-
-	return Message{}, false
-}
-
-func stripMention(text string) string {
-	for strings.HasPrefix(text, "<@") {
-		idx := strings.Index(text, ">")
-		if idx == -1 {
-			break
-		}
-		text = strings.TrimSpace(text[idx+1:])
+	if msgEvt.SubType != "" && msgEvt.SubType != "file_share" {
+		return Message{}, false
 	}
-	return text
+	msg := Message{
+		Text:    msgEvt.Text,
+		Channel: msgEvt.Channel,
+		Thread:  msgEvt.TimeStamp,
+		Sender:  msgEvt.User,
+	}
+	if msgEvt.ThreadTimeStamp != "" {
+		msg.Thread = msgEvt.ThreadTimeStamp
+	}
+	if msgEvt.Message != nil {
+		for _, f := range msgEvt.Message.Files {
+			msg.Files = append(msg.Files, File{ID: f.ID, Name: f.Name})
+		}
+	}
+	return msg, true
 }
 
 func (s *Slack) Reply(ctx context.Context, msg Message, text string) error {

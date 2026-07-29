@@ -36,7 +36,7 @@ func (b *Bot) Run(ctx context.Context) error {
 func (b *Bot) handle(ctx context.Context, msg platform.Message) {
 	image, timeout, command, err := parseArgs(msg.Text)
 	if err != nil {
-		b.p.Reply(ctx, msg, "usage: `run <image> <command>`  e.g.  `run alpine echo hello`")
+		b.p.Reply(ctx, msg, "usage: --image <name> [--timeout <sec>] <command>")
 		return
 	}
 
@@ -62,35 +62,34 @@ func (b *Bot) handle(ctx context.Context, msg platform.Message) {
 func parseArgs(text string) (image string, timeout int, command []string, err error) {
 	timeout = 600
 	fields := strings.Fields(text)
-	if len(fields) == 0 {
-		return "", 0, nil, fmt.Errorf("empty message")
-	}
-
-	idx := 0
-	if strings.ToLower(fields[0]) == "run" {
-		idx = 1
-	}
-	if idx >= len(fields) {
-		return "", 0, nil, fmt.Errorf("image is required")
-	}
-
-	image = fields[idx]
-	if idx+1 >= len(fields) {
-		return "", 0, nil, fmt.Errorf("command is required")
-	}
-
-	command = fields[idx+1:]
-
-	for i := 0; i < len(command); i++ {
-		if command[i] == "--timeout" && i+1 < len(command) {
-			if v, e := strconv.Atoi(command[i+1]); e == nil {
-				timeout = v
+	for i := 0; i < len(fields); i++ {
+		switch fields[i] {
+		case "--image":
+			if i+1 >= len(fields) {
+				return "", 0, nil, fmt.Errorf("--image needs a value")
 			}
-			command = append(command[:i], command[i+2:]...)
-			break
+			image = fields[i+1]
+			i++
+		case "--timeout":
+			if i+1 >= len(fields) {
+				return "", 0, nil, fmt.Errorf("--timeout needs a value")
+			}
+			v, e := strconv.Atoi(fields[i+1])
+			if e != nil {
+				return "", 0, nil, fmt.Errorf("--timeout must be a number")
+			}
+			timeout = v
+			i++
+		default:
+			command = append(command, fields[i])
 		}
 	}
-
+	if image == "" {
+		return "", 0, nil, fmt.Errorf("--image is required")
+	}
+	if len(command) == 0 {
+		return "", 0, nil, fmt.Errorf("command is required")
+	}
 	return image, timeout, command, nil
 }
 

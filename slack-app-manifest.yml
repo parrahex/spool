@@ -1,0 +1,21 @@
+display_information:
+  name: Spool Bot
+  description: Run Docker jobs from Slack
+features:
+  bot_user:
+    display_name: Spool Bot
+    always_online: true
+oauth_config:
+  scopes:
+    bot:
+      - chat:write
+      - im:history
+      - im:read
+      - files:read
+      - app_mentions:read
+settings:
+  event_subscriptions:
+    bot_events:
+      - message.im
+      - app_mention
+  socket_mode_enabled: true

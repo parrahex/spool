@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strconv"
+	"sync"
 	"time"
 
 	"github.com/parrahex/spool/internal/jobs"
@@ -24,7 +26,18 @@ func main() {
 	s := store.NewStore(addr)
 
 	recoverExpired(ctx, s, q)
-	runLoop(ctx, q, s)
+
+	var wg sync.WaitGroup
+	concurrency := workerCount()
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			workerLoop(ctx, id, q, s)
+		}(i)
+	}
+	wg.Wait()
+	fmt.Println("worker shutting down")
 }
 
 func redisAddr() string {
@@ -32,6 +45,18 @@ func redisAddr() string {
 		return addr
 	}
 	return "localhost:6379"
+}
+
+func workerCount() int {
+	s := os.Getenv("SPOOL_CONCURRENCY")
+	if s == "" {
+		return 1
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 1 {
+		return 1
+	}
+	return n
 }
 
 func recoverExpired(ctx context.Context, s *store.Store, q *queue.Queue) {
@@ -64,16 +89,16 @@ func recoverJob(ctx context.Context, s *store.Store, q *queue.Queue, job *jobs.J
 	fmt.Println("recovered expired job:", job.ID)
 }
 
-func runLoop(ctx context.Context, q *queue.Queue, s *store.Store) {
+func workerLoop(ctx context.Context, id int, q *queue.Queue, s *store.Store) {
 	for {
 		job := nextJob(ctx, q, s)
 		if job == nil {
 			if ctx.Err() != nil {
-				fmt.Println("worker shutting down")
 				return
 			}
 			continue
 		}
+		fmt.Printf("[worker-%d] processing job: %s\n", id, job.ID)
 		processJob(ctx, s, q, job)
 	}
 }

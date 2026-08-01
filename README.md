@@ -35,6 +35,8 @@ export SLACK_BOT_TOKEN=xoxb-...
 make dev
 ```
 
+![Startup demo](test-artifacts/sv-start-demo.gif)
+
 ### From the CLI
 
 ```bash
@@ -42,6 +44,8 @@ go run ./cmd/cli run --image alpine echo hello world
 go run ./cmd/cli status 63572007-a8ce-4657-9e5c-0455dfdac509
 go run ./cmd/cli cancel 63572007-a8ce-4657-9e5c-0455dfdac509
 ```
+
+![CLI demo](test-artifacts/cli-demo.gif)
 
 ### From Slack
 
@@ -62,6 +66,8 @@ Mention the bot in any channel or DM it. Attach files to run them:
 ```
 
 The bot replies in a thread with the job id, then posts the exit code and output when the job finishes.
+
+![Slack demo](test-artifacts/slack-demo.gif)
 
 ## Features
 

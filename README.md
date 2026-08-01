@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="mylogo.png" alt="Spool" width="250"/>
+  <img src="mylogo.png" alt="Spool" width="200"/>
 </p>
 
 <h1 align="center">Spool</h1>
@@ -35,7 +35,9 @@ export SLACK_BOT_TOKEN=xoxb-...
 make dev
 ```
 
-![Startup demo](test-artifacts/sv-start-demo.gif)
+<p align="center">
+  <img src="test-artifacts/sv-start-demo.gif" alt="Startup demo" width="650"/>
+</p>
 
 ### From the CLI
 
@@ -45,7 +47,9 @@ go run ./cmd/cli status 63572007-a8ce-4657-9e5c-0455dfdac509
 go run ./cmd/cli cancel 63572007-a8ce-4657-9e5c-0455dfdac509
 ```
 
-![CLI demo](test-artifacts/cli-demo.gif)
+<p align="center">
+  <img src="test-artifacts/cli-demo.gif" alt="CLI demo" width="650"/>
+</p>
 
 ### From Slack
 
@@ -67,7 +71,9 @@ Mention the bot in any channel or DM it. Attach files to run them:
 
 The bot replies in a thread with the job id, then posts the exit code and output when the job finishes.
 
-![Slack demo](test-artifacts/slack-demo.gif)
+<p align="center">
+  <img src="test-artifacts/slack-demo.gif" alt="Slack demo" width="650"/>
+</p>
 
 ## Features
 

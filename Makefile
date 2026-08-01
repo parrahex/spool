@@ -4,12 +4,10 @@ REDIS_ADDR ?= localhost:6379
 SPOOL_CONCURRENCY ?= 2
 
 dev: stop
-	@docker compose up -d
+	@docker compose up -d --wait
 	@echo "redis up"
-	@sleep 1
 	@echo "starting worker..."
 	@REDIS_ADDR=$(REDIS_ADDR) SPOOL_CONCURRENCY=$(SPOOL_CONCURRENCY) go run ./cmd/worker &
-	@sleep 1
 	@echo "starting bot..."
 	@go run ./cmd/bot
 

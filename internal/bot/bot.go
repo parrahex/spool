@@ -106,7 +106,19 @@ func (b *Bot) saveFiles(ctx context.Context, msg platform.Message) (string, erro
 			return "", err
 		}
 	}
+	if len(msg.Files) == 1 && isArchive(msg.Files[0].Name) {
+		return filepath.Join(dir, msg.Files[0].Name), nil
+	}
 	return dir, nil
+}
+
+func isArchive(name string) bool {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".zip", ".gz", ".tgz":
+		return true
+	default:
+		return false
+	}
 }
 
 func (b *Bot) submitJob(ctx context.Context, image string, command []string, path string, timeout int) (string, error) {
@@ -166,14 +178,7 @@ func formatResult(job *jobs.Job) string {
 	}
 	out := strings.TrimSpace(job.Output)
 	if out != "" {
-		lines := strings.Split(out, "\n")
-		if len(lines) > 40 {
-			lines = lines[:40]
-			sb.WriteString(strings.Join(lines, "\n"))
-			sb.WriteString("\n... (truncated)")
-		} else {
-			sb.WriteString(out)
-		}
+		sb.WriteString(out)
 	}
 	return sb.String()
 }

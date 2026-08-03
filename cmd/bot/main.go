@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"syscall"
 
 	"github.com/parrahex/spool/internal/bot"
 	"github.com/parrahex/spool/internal/platform"
@@ -13,7 +14,7 @@ import (
 )
 
 func main() {
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
 	p := platform.NewSlack(env("SLACK_APP_TOKEN"), env("SLACK_BOT_TOKEN"))

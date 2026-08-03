@@ -36,6 +36,9 @@ func Run(ctx context.Context, job *jobs.Job) {
 
 	output, err := runDocker(runCtx, job, workspace)
 	if err != nil {
+		if runCtx.Err() != nil {
+			CleanupOrphaned(job.ID)
+		}
 		job.MarkFailed(err.Error())
 		job.ExitCode = exitCode(err)
 		job.Output = output
@@ -69,7 +72,7 @@ func dockerArgs(job *jobs.Job, workspace string) []string {
 }
 
 func CleanupOrphaned(jobID string) {
-	out, err := exec.Command("docker", "ps", "-q", "--filter", "label=spool-job-id="+jobID).Output()
+	out, err := exec.Command("docker", "ps", "-aq", "--filter", "label=spool-job-id="+jobID).Output()
 	if err != nil {
 		return
 	}

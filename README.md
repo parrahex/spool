@@ -90,6 +90,7 @@ The bot replies in a thread with the job id, then posts the exit code and output
 | -------------------- | ----------------- | ------------------------------ |
 | `REDIS_ADDR`         | `localhost:6379`  | Redis address                  |
 | `SPOOL_CONCURRENCY`  | `1`               | Number of parallel workers     |
+| `SPOOL_SHUTDOWN_TIMEOUT` | `30s`          | Grace period for active jobs   |
 | `SLACK_APP_TOKEN`    | —                 | App-level token for Socket Mode |
 | `SLACK_BOT_TOKEN`    | —                 | Bot user OAuth token           |
 

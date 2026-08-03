@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/parrahex/spool/internal/jobs"
@@ -15,17 +16,27 @@ import (
 	"github.com/parrahex/spool/internal/store"
 )
 
-const leaseInterval = 15 * time.Second
+const (
+	leaseInterval          = 15 * time.Second
+	defaultShutdownTimeout = 30 * time.Second
+	saveTimeout            = 5 * time.Second
+)
 
 func main() {
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer cancel()
+	intakeCtx, stopIntake := context.WithCancel(context.Background())
+	jobCtx, stopJobs := context.WithCancel(context.Background())
+	defer stopIntake()
+	defer stopJobs()
+
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(signals)
 
 	addr := redisAddr()
 	q := queue.NewQueue(addr)
 	s := store.NewStore(addr)
 
-	recoverExpired(ctx, s, q)
+	recoverExpired(context.Background(), s, q)
 
 	var wg sync.WaitGroup
 	concurrency := workerCount()
@@ -33,11 +44,27 @@ func main() {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			workerLoop(ctx, id, q, s)
+			workerLoop(intakeCtx, jobCtx, id, q, s)
 		}(i)
 	}
+
+	<-signals
+	fmt.Println("shutdown requested; waiting for active jobs")
+	stopIntake()
+	shutdown := time.AfterFunc(shutdownTimeout(), stopJobs)
 	wg.Wait()
+	shutdown.Stop()
+	stopJobs()
 	fmt.Println("worker shutting down")
+}
+
+func shutdownTimeout() time.Duration {
+	if value := os.Getenv("SPOOL_SHUTDOWN_TIMEOUT"); value != "" {
+		if timeout, err := time.ParseDuration(value); err == nil && timeout > 0 {
+			return timeout
+		}
+	}
+	return defaultShutdownTimeout
 }
 
 func redisAddr() string {
@@ -89,17 +116,17 @@ func recoverJob(ctx context.Context, s *store.Store, q *queue.Queue, job *jobs.J
 	fmt.Println("recovered expired job:", job.ID)
 }
 
-func workerLoop(ctx context.Context, id int, q *queue.Queue, s *store.Store) {
+func workerLoop(intakeCtx, jobCtx context.Context, id int, q *queue.Queue, s *store.Store) {
 	for {
-		job := nextJob(ctx, q, s)
+		job := nextJob(intakeCtx, q, s)
 		if job == nil {
-			if ctx.Err() != nil {
+			if intakeCtx.Err() != nil {
 				return
 			}
 			continue
 		}
 		fmt.Printf("[worker-%d] processing job: %s\n", id, job.ID)
-		processJob(ctx, s, q, job)
+		processJob(jobCtx, s, q, job)
 	}
 }
 
@@ -136,7 +163,9 @@ func processJob(ctx context.Context, s *store.Store, q *queue.Queue, job *jobs.J
 
 	runner.Run(ctx, job)
 
-	saveFinal(ctx, s, job)
+	saveCtx, cancel := context.WithTimeout(context.Background(), saveTimeout)
+	defer cancel()
+	saveFinal(saveCtx, s, job)
 }
 
 func handlePanic(job *jobs.Job, s *store.Store) {

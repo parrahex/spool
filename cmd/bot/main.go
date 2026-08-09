@@ -14,14 +14,20 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Println(err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
 	p := platform.NewSlack(env("SLACK_APP_TOKEN"), env("SLACK_BOT_TOKEN"))
 	b := bot.New(p, setupQueue(), setupStore())
-	if err := b.Run(ctx); err != nil {
-		log.Fatal(err)
-	}
+
+	return b.Run(ctx)
 }
 
 func env(key string) string {

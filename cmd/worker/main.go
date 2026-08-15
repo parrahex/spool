@@ -17,40 +17,52 @@ import (
 )
 
 const (
-	leaseInterval          = 15 * time.Second
+	// Lease renewals keep another worker from recovering a job that is still active
+	leaseInterval = 15 * time.Second
+	// Active jobs receive this much time to finish after shutdown begins
 	defaultShutdownTimeout = 30 * time.Second
-	saveTimeout            = 5 * time.Second
+	// Final job state is saved with this independent timeout during shutdown
+	saveTimeout = 5 * time.Second
 )
 
 func main() {
+	// Intake and active execution have separate lifetimes: stop taking new jobs
+	// first, then cancel active jobs only after the shutdown grace period
 	intakeCtx, stopIntake := context.WithCancel(context.Background())
 	jobCtx, stopJobs := context.WithCancel(context.Background())
 	defer stopIntake()
 	defer stopJobs()
 
+	// Listen for Ctrl+C and the termination signal used by process managers
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(signals)
 
+	// Queue and store point to the same Redis instance so IDs and job data match
 	addr := redisAddr()
 	q := queue.NewQueue(addr)
 	s := store.NewStore(addr)
 
+	// Requeue jobs whose previous worker disappeared before finishing them
 	recoverExpired(context.Background(), s, q)
 
 	var wg sync.WaitGroup
 	concurrency := workerCount()
 	for i := 0; i < concurrency; i++ {
 		wg.Add(1)
+		// Each goroutine runs an independent queue consumer
 		go func(id int) {
 			defer wg.Done()
 			workerLoop(intakeCtx, jobCtx, id, q, s)
 		}(i)
 	}
 
+	// Block until the operating system asks the worker to stop
 	<-signals
 	fmt.Println("shutdown requested; waiting for active jobs")
+	// Do not accept more jobs, but let current jobs continue for now
 	stopIntake()
+	// Force active jobs to stop if they exceed the graceful shutdown window
 	shutdown := time.AfterFunc(shutdownTimeout(), stopJobs)
 	wg.Wait()
 	shutdown.Stop()
@@ -59,6 +71,7 @@ func main() {
 }
 
 func shutdownTimeout() time.Duration {
+	// SPOOL_SHUTDOWN_TIMEOUT accepts Go duration strings such as "45s" or "2m"
 	if value := os.Getenv("SPOOL_SHUTDOWN_TIMEOUT"); value != "" {
 		if timeout, err := time.ParseDuration(value); err == nil && timeout > 0 {
 			return timeout
@@ -68,6 +81,7 @@ func shutdownTimeout() time.Duration {
 }
 
 func redisAddr() string {
+	// REDIS_ADDR lets deployments point the worker at a non-local Redis instance
 	if addr := os.Getenv("REDIS_ADDR"); addr != "" {
 		return addr
 	}
@@ -75,6 +89,7 @@ func redisAddr() string {
 }
 
 func workerCount() int {
+	// SPOOL_CONCURRENCY controls how many jobs can be processed in parallel
 	s := os.Getenv("SPOOL_CONCURRENCY")
 	if s == "" {
 		return 1
@@ -87,6 +102,7 @@ func workerCount() int {
 }
 
 func recoverExpired(ctx context.Context, s *store.Store, q *queue.Queue) {
+	// A job with an expired lease was probably interrupted by a worker crash
 	all, err := s.ListAll(ctx)
 	if err != nil {
 		fmt.Println("recovery scan error:", err)
@@ -100,6 +116,7 @@ func recoverExpired(ctx context.Context, s *store.Store, q *queue.Queue) {
 }
 
 func recoverJob(ctx context.Context, s *store.Store, q *queue.Queue, job *jobs.Job) {
+	// Remove a container left by the crashed worker before putting the job back
 	runner.CleanupOrphaned(job.ID)
 	job.Status = jobs.StatusPending
 	job.Error = "worker crashed or lease expired"
@@ -117,6 +134,7 @@ func recoverJob(ctx context.Context, s *store.Store, q *queue.Queue, job *jobs.J
 }
 
 func workerLoop(intakeCtx, jobCtx context.Context, id int, q *queue.Queue, s *store.Store) {
+	// Keep consuming until intake is cancelled during shutdown
 	for {
 		job := nextJob(intakeCtx, q, s)
 		if job == nil {
@@ -131,6 +149,7 @@ func workerLoop(intakeCtx, jobCtx context.Context, id int, q *queue.Queue, s *st
 }
 
 func nextJob(ctx context.Context, q *queue.Queue, s *store.Store) *jobs.Job {
+	// The queue carries only IDs; the store contains the full job definition
 	jobID, err := q.Dequeue(ctx)
 	if err != nil {
 		fmt.Println("Dequeue error:", err)
@@ -140,11 +159,17 @@ func nextJob(ctx context.Context, q *queue.Queue, s *store.Store) *jobs.Job {
 		return nil
 	}
 	job, err := s.Get(ctx, jobID)
+	// Get failed but the ID is already out of the queue; put it back
+	// so a transient Redis error does not lose the job
 	if err != nil {
 		fmt.Println("Get Job error:", err)
+		if reerr := q.Enqueue(ctx, jobID); reerr != nil {
+			fmt.Println("Requeue error:", reerr)
+		}
 		return nil
 	}
 	if job.IsCancelled() {
+		// A cancelled pending job can still have an old ID in the queue
 		fmt.Println("skipping cancelled job:", job.ID)
 		return nil
 	}
@@ -152,23 +177,28 @@ func nextJob(ctx context.Context, q *queue.Queue, s *store.Store) *jobs.Job {
 }
 
 func processJob(ctx context.Context, s *store.Store, q *queue.Queue, job *jobs.Job) {
+	// Convert unexpected panics into a failed job instead of killing the worker
 	defer handlePanic(job, s)
 
 	if !acquireLease(ctx, s, q, job) {
 		return
 	}
 
+	// Keep extending ownership while Docker is running
 	stopLeaseRenewer := startLeaseRenewer(ctx, s, job)
 	defer close(stopLeaseRenewer)
 
+	// runner.Run mutates the job object; saveFinal persists those mutations
 	runner.Run(ctx, job)
 
+	// Use a fresh context so shutdown cancellation does not prevent the final save
 	saveCtx, cancel := context.WithTimeout(context.Background(), saveTimeout)
 	defer cancel()
 	saveFinal(saveCtx, s, job)
 }
 
 func handlePanic(job *jobs.Job, s *store.Store) {
+	// recover catches panics raised while processing one job
 	if r := recover(); r != nil {
 		msg := fmt.Sprintf("panic: %v", r)
 		if err, ok := r.(error); ok {
@@ -180,9 +210,11 @@ func handlePanic(job *jobs.Job, s *store.Store) {
 }
 
 func acquireLease(ctx context.Context, s *store.Store, q *queue.Queue, job *jobs.Job) bool {
+	// Persist ownership before starting Docker so a crash can be detected later
 	job.MarkLeased(time.Now(), leaseInterval*2)
 
 	if job.ExhaustedRetries() {
+		// Do not start another execution after the retry threshold is reached
 		job.MarkFailed(fmt.Sprintf("exhausted %d retries", job.MaxRetries))
 		if err := s.Save(ctx, job); err != nil {
 			fmt.Println("retry limit save error:", err)
@@ -192,6 +224,7 @@ func acquireLease(ctx context.Context, s *store.Store, q *queue.Queue, job *jobs
 	}
 
 	if err := s.Save(ctx, job); err != nil {
+		// If ownership was not persisted, return the ID to the queue for retry
 		fmt.Println("lease save error:", err)
 		if reerr := q.Requeue(ctx, job.ID); reerr != nil {
 			fmt.Println("requeue after lease failure:", reerr)
@@ -202,17 +235,20 @@ func acquireLease(ctx context.Context, s *store.Store, q *queue.Queue, job *jobs
 }
 
 func startLeaseRenewer(ctx context.Context, s *store.Store, job *jobs.Job) chan struct{} {
+	// Closing the returned channel tells the renewer that processing is finished
 	done := make(chan struct{})
 	go renewLeaseLoop(ctx, s, job, done)
 	return done
 }
 
 func renewLeaseLoop(ctx context.Context, s *store.Store, job *jobs.Job, done chan struct{}) {
+	// Refresh the lease before it expires so long-running jobs are not recovered
 	ticker := time.NewTicker(leaseInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
+			// The worker is still alive, so extend its ownership window
 			job.LeaseUntil = time.Now().Add(leaseInterval * 2)
 			if err := s.Save(ctx, job); err != nil {
 				fmt.Println("lease refresh error:", err)
@@ -226,6 +262,7 @@ func renewLeaseLoop(ctx context.Context, s *store.Store, job *jobs.Job, done cha
 }
 
 func saveFinal(ctx context.Context, s *store.Store, job *jobs.Job) {
+	// Store the state produced by runner.Run and make it visible to status clients
 	if err := s.Save(ctx, job); err != nil {
 		fmt.Println("save error:", err)
 		return

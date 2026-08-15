@@ -9,14 +9,14 @@ dev: stop
 	@echo "starting worker..."
 	@REDIS_ADDR=$(REDIS_ADDR) SPOOL_CONCURRENCY=$(SPOOL_CONCURRENCY) go run ./cmd/worker &
 	@echo "starting bot..."
-	@go run ./cmd/bot
+	@go run ./internal/bot/bot
 
 stop:
 	@pkill -TERM -f "go run ./cmd/worker" >/dev/null 2>&1 || true
-	@pkill -TERM -f "go run ./cmd/bot" >/dev/null 2>&1 || true
+	@pkill -TERM -f "go run ./internal/bot/bot" >/dev/null 2>&1 || true
 	@for i in $$(seq 1 320); do \
 		worker=$$(pgrep -f '[g]o run ./cmd/worker' || true); \
-		bot=$$(pgrep -f '[g]o run ./cmd/bot' || true); \
+		bot=$$(pgrep -f '[g]o run ./internal/bot/bot' || true); \
 		if [ -z "$$worker" ] && [ -z "$$bot" ]; then break; fi; \
 		sleep 0.1; \
 	done

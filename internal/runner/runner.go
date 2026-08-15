@@ -11,6 +11,8 @@ import (
 	"github.com/parrahex/spool/internal/jobs"
 )
 
+// Run prepares the job workspace, executes Docker, and updates the Job object
+// with its final status, output, and exit code; the caller persists the object
 func Run(ctx context.Context, job *jobs.Job) {
 	job.MarkRunning(time.Now())
 
@@ -48,6 +50,7 @@ func Run(ctx context.Context, job *jobs.Job) {
 	job.MarkCompleted(0, output)
 }
 
+// executionContext applies the job timeout and falls back to the package default
 func executionContext(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
 	if timeout <= 0 {
 		timeout = jobs.DefaultTimeout
@@ -55,6 +58,7 @@ func executionContext(ctx context.Context, timeout time.Duration) (context.Conte
 	return context.WithTimeout(ctx, timeout)
 }
 
+// runDocker starts the external Docker CLI and captures both stdout and stderr
 func runDocker(ctx context.Context, job *jobs.Job, workspace string) (string, error) {
 	args := dockerArgs(job, workspace)
 	cmd := exec.CommandContext(ctx, "docker", args...)
@@ -62,6 +66,8 @@ func runDocker(ctx context.Context, job *jobs.Job, workspace string) (string, er
 	return string(out), err
 }
 
+// dockerArgs maps the Job model to `docker run` arguments
+// The user's Command is appended after the image as the container process
 func dockerArgs(job *jobs.Job, workspace string) []string {
 	args := []string{"run", "--rm", "--label", "spool-job-id=" + job.ID}
 	if workspace != "" {
@@ -71,6 +77,8 @@ func dockerArgs(job *jobs.Job, workspace string) []string {
 	return append(args, job.Command...)
 }
 
+// CleanupOrphaned removes Docker containers labeled with the job ID
+// It is used when cancellation or an expired worker lease leaves a container behind
 func CleanupOrphaned(jobID string) {
 	out, err := exec.Command("docker", "ps", "-aq", "--filter", "label=spool-job-id="+jobID).Output()
 	if err != nil {
@@ -81,6 +89,7 @@ func CleanupOrphaned(jobID string) {
 	}
 }
 
+// exitCode extracts a process exit code when Docker returns an exec error
 func exitCode(err error) int {
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) {

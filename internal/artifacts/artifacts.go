@@ -11,10 +11,12 @@ import (
 	"strings"
 )
 
-// Workspace returns a directory that can be mounted into a job container.
+// Workspace returns a directory that can be mounted into a job container
 // Directories are mounted as-is; single files and archives are copied or
-// extracted into a temporary directory that is removed by cleanup.
+// extracted into a temporary directory that is removed by cleanup
 func Workspace(jobID, sourcePath string) (workspace string, cleanup func(), err error) {
+	// A directory can be mounted directly; files and archives need a temporary
+	// workspace so Docker always receives a directory mount
 	if sourcePath == "" {
 		return "", func() {}, nil
 	}
@@ -52,6 +54,8 @@ func Workspace(jobID, sourcePath string) (workspace string, cleanup func(), err 
 	return workspace, cleanup, nil
 }
 
+// extractZIP unpacks an archive while preventing zip-slip: every entry is
+// validated against the destination directory before it is written
 func extractZIP(archivePath, destination string) error {
 	reader, err := zip.OpenReader(archivePath)
 	if err != nil {
@@ -89,6 +93,8 @@ func extractZIP(archivePath, destination string) error {
 	return nil
 }
 
+// extractTarGZ unpacks a tar.gz archive; the file mode is preserved so
+// scripts keep their executable bit inside the job container
 func extractTarGZ(archivePath, destination string) error {
 	input, err := os.Open(archivePath)
 	if err != nil {
@@ -133,6 +139,7 @@ func extractTarGZ(archivePath, destination string) error {
 	}
 }
 
+// copyFile copies a single file into the workspace, preserving its mode
 func copyFile(source, destination string) error {
 	input, err := os.Open(source)
 	if err != nil {
@@ -146,6 +153,8 @@ func copyFile(source, destination string) error {
 	return writeFile(destination, info.Mode(), input)
 }
 
+// writeFile creates a file with the archive's mode rather than the
+// process default, so executable entries remain executable
 func writeFile(path string, mode os.FileMode, input io.Reader) error {
 	output, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode.Perm())
 	if err != nil {
@@ -160,6 +169,7 @@ func writeFile(path string, mode os.FileMode, input io.Reader) error {
 }
 
 func safePath(destination, name string) (string, error) {
+	// Prevent archive entries such as ../../file from escaping the extraction directory
 	target := filepath.Join(destination, name)
 	cleanDestination := filepath.Clean(destination) + string(os.PathSeparator)
 	if !strings.HasPrefix(filepath.Clean(target)+string(os.PathSeparator), cleanDestination) {

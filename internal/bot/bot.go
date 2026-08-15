@@ -16,8 +16,10 @@ import (
 	"github.com/parrahex/spool/internal/store"
 )
 
+// watchInterval controls how often the bot checks Redis for a finished job
 const watchInterval = 3 * time.Second
 
+// Bot connects a messaging platform to the shared Spool queue and store
 type Bot struct {
 	p platform.Platform
 	q *queue.Queue
@@ -29,11 +31,13 @@ func New(p platform.Platform, q *queue.Queue, s *store.Store) *Bot {
 }
 
 func (b *Bot) Run(ctx context.Context) error {
+	// The platform invokes b.handle for each incoming message
 	fmt.Println("bot listening")
 	return b.p.Listen(ctx, b.handle)
 }
 
 func (b *Bot) handle(ctx context.Context, msg platform.Message) {
+	// A message can submit a command, an attached file, or both
 	image, timeout, command, err := parseArgs(msg.Text)
 	if err != nil {
 		b.p.Reply(ctx, msg, "usage: `@Spool <image> [command]`")
@@ -70,6 +74,7 @@ func (b *Bot) handle(ctx context.Context, msg platform.Message) {
 }
 
 func parseArgs(text string) (image string, timeout int, command []string, err error) {
+	// Bot messages use a small parser instead of Cobra because they arrive as text
 	timeout = 600
 	fields := strings.Fields(text)
 	if len(fields) == 0 {
@@ -95,6 +100,7 @@ func parseArgs(text string) (image string, timeout int, command []string, err er
 }
 
 func (b *Bot) saveFiles(ctx context.Context, msg platform.Message) (string, error) {
+	// Downloaded files are kept in a temporary directory whose path is stored in Job
 	dir, err := os.MkdirTemp("", "spool-bot-")
 	if err != nil {
 		return "", err
@@ -122,6 +128,7 @@ func isArchive(name string) bool {
 }
 
 func (b *Bot) submitJob(ctx context.Context, image string, command []string, path string, timeout int) (string, error) {
+	// Submission mirrors the CLI: persist the full job before enqueueing its ID
 	job := &jobs.Job{
 		ID:         uuid.NewString(),
 		Image:      image,
@@ -143,6 +150,7 @@ func (b *Bot) submitJob(ctx context.Context, image string, command []string, pat
 }
 
 func (b *Bot) watchJob(ctx context.Context, msg platform.Message, jobID string) {
+	// Poll Redis until the worker writes a terminal status
 	ticker := time.NewTicker(watchInterval)
 	defer ticker.Stop()
 	for {

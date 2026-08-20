@@ -1,0 +1,17 @@
+.git
+.gitignore
+.github
+.DS_Store
+data/
+test-artifacts/
+scripts/
+mylogo.png
+README.md
+slack-app-manifest.yml
+LICENSE
+cli
+worker
+bot
+.env
+.env.*
+*.log

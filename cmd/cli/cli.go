@@ -70,9 +70,12 @@ func runCmd() *cobra.Command {
 			if err := s.Save(ctx, job); err != nil {
 				return err
 			}
-			// The queue contains only the ID; the full job remains in the store
+
 			if err := q.Enqueue(ctx, job.ID); err != nil {
-				return err
+				if rollbackErr := s.Delete(ctx, job.ID); rollbackErr != nil {
+					return fmt.Errorf("enqueue job: %w; rollback failed: %v", err, rollbackErr)
+				}
+				return fmt.Errorf("enqueue job: %w", err)
 			}
 
 			fmt.Println("enqueued job:", job.ID, "image:", image, "command:", args)

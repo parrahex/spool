@@ -47,6 +47,10 @@ func (s *Store) Get(ctx context.Context, id string) (*jobs.Job, error) {
 	return &j, nil
 }
 
+func (s *Store) Delete(ctx context.Context, id string) error {
+	return s.client.Del(ctx, "spool:job:"+id).Err()
+}
+
 // ListAll scans Redis for every stored job and is used during worker recovery
 func (s *Store) ListAll(ctx context.Context) ([]*jobs.Job, error) {
 	iter := s.client.Scan(ctx, 0, "spool:job:*", 0).Iterator()

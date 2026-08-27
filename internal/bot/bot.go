@@ -144,7 +144,11 @@ func (b *Bot) submitJob(ctx context.Context, image string, command []string, pat
 		return "", err
 	}
 	if err := b.q.Enqueue(ctx, job.ID); err != nil {
-		return "", err
+		if rollbackErr := b.s.Delete(ctx, job.ID); rollbackErr != nil {
+			return "", fmt.Errorf("enqueue job: %w; rollback failed: %v", err,
+				rollbackErr)
+		}
+		return "", fmt.Errorf("enqueue job: %w", err)
 	}
 	return job.ID, nil
 }

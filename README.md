@@ -7,7 +7,7 @@
 <p align="center">Run Docker jobs from a CLI or a Slack channel.</p>
 
 <p align="center">
-  <a href="https://go.dev"><img src="https://img.shields.io/badge/go-1.26-00ADD8?logo=go" alt="Go 1.26"></a>
+  <a href="https://go.dev"><img src="https://img.shields.io/badge/go-1.26-00ADD8?logo=go" alt="Go 1.27"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/docker-required-2496ED?logo=docker&logoColor=white" alt="Docker required">
   <img src="https://img.shields.io/badge/redis-queue-DC382D?logo=redis&logoColor=white" alt="Redis queue">
@@ -17,7 +17,7 @@
 
 ## Install
 
-Requires [Go 1.26+](https://go.dev/dl/), [Docker](https://docs.docker.com/get-docker/) and a running Redis (included via compose):
+Requires [Go 1.27+](https://go.dev/dl/), [Docker](https://docs.docker.com/get-docker/) and a running Redis (included via compose):
 
 ```bash
 git clone https://github.com/parrahex/spool.git

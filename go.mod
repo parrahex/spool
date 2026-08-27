@@ -1,9 +1,8 @@
 module github.com/parrahex/spool
 
-go 1.26.4
+go 1.27.0
 
 require (
-	github.com/google/uuid v1.6.0
 	github.com/redis/go-redis/v9 v9.21.0
 	github.com/slack-go/slack v0.27.0
 	github.com/spf13/cobra v1.10.2
@@ -25,6 +24,6 @@ require (
 	github.com/subosito/gotenv v1.6.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/sys v0.30.0 // indirect
-	golang.org/x/text v0.28.0 // indirect
+	golang.org/x/sys v0.44.0 // indirect
+	golang.org/x/text v0.39.0 // indirect
 )

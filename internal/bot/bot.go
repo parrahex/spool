@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/parrahex/spool/internal/jobs"
 	"github.com/parrahex/spool/internal/platform"
 	"github.com/parrahex/spool/internal/queue"
@@ -130,7 +130,7 @@ func isArchive(name string) bool {
 func (b *Bot) submitJob(ctx context.Context, image string, command []string, path string, timeout int) (string, error) {
 	// Submission mirrors the CLI: persist the full job before enqueueing its ID
 	job := &jobs.Job{
-		ID:         uuid.NewString(),
+		ID:         uuid.New().String(),
 		Image:      image,
 		Path:       path,
 		Command:    command,

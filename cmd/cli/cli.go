@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/parrahex/spool/internal/jobs"
 	"github.com/parrahex/spool/internal/queue"
 	"github.com/parrahex/spool/internal/runner"
@@ -53,7 +53,7 @@ func runCmd() *cobra.Command {
 			// A Job is the durable description of the work; save it before its ID
 			// is pushed into the queue so a worker can load it immediately
 			job := &jobs.Job{
-				ID:         uuid.NewString(),
+				ID:         uuid.New().String(),
 				Image:      image,
 				Path:       path,
 				Command:    args,

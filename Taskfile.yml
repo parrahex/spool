@@ -36,16 +36,19 @@ tasks:
     desc: 'Submit a job and wait for its result (task run -- --image alpine echo hello)'
     cmds:
       - go run ./cmd/cli run {{.CLI_ARGS}}
+    silent: true
 
   status:
     desc: 'Show a job and its output (task status -- <job-id>)'
     cmds:
       - go run ./cmd/cli status {{.CLI_ARGS}}
+    silent: true
 
   cancel:
     desc: 'Cancel a job (task cancel -- <job-id>)'
     cmds:
       - go run ./cmd/cli cancel {{.CLI_ARGS}}
+    silent: true
 
   build:
     desc: Build all Go packages

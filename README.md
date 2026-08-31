@@ -76,10 +76,6 @@ Mention the bot in any channel or DM it. Attach files to run them:
 
 The bot replies in a thread with the job id, then posts the exit code and output when the job finishes.
 
-<p align="center">
-  <img src="test-artifacts/slack-demo.gif" alt="Slack demo" width="650"/>
-</p>
-
 ## Development commands
 
 Run `task` or `task --list` to see the available commands.
@@ -94,6 +90,8 @@ Run `task` or `task --list` to see the available commands.
 | `task check` | Build, vet, and test all Go packages |
 | `task fmt` | Format all Go packages |
 | `task docker:build` | Build the production worker image |
+
+The CLI demo is generated from `test-artifacts/cli.tape` using [VHS](https://github.com/charmbracelet/vhs).
 
 ## Features
 

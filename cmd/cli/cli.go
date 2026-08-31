@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
-	"strings"
+	"syscall"
 	"time"
 	"uuid"
 
@@ -78,7 +81,28 @@ func runCmd() *cobra.Command {
 				return fmt.Errorf("enqueue job: %w", err)
 			}
 
-			fmt.Println("enqueued job:", job.ID, "image:", image, "command:", args)
+			fmt.Fprintln(cmd.OutOrStdout(), "enqueued job:", job.ID, "image:", image, "command:", args)
+
+			lastStatus := ""
+			finished, err := waitForJob(ctx, s, job.ID, func(current *jobs.Job) {
+				if current.Status != lastStatus {
+					fmt.Fprintln(cmd.OutOrStdout(), "status:", current.Status)
+					lastStatus = current.Status
+				}
+			})
+			if errors.Is(err, context.Canceled) {
+				fmt.Fprintln(cmd.ErrOrStderr(), "stopped waiting; job continues:", job.ID)
+				return nil
+			}
+			if err != nil {
+				return fmt.Errorf("wait for job %s: %w", job.ID, err)
+			}
+
+			fmt.Fprintln(cmd.OutOrStdout(), "--- result ---")
+			writeJob(cmd.OutOrStdout(), finished)
+			if finished.Status != jobs.StatusCompleted {
+				return fmt.Errorf("job finished with status %s", finished.Status)
+			}
 			return nil
 		},
 	}
@@ -104,35 +128,7 @@ func statusCmd() *cobra.Command {
 				return fmt.Errorf("job not found: %w", err)
 			}
 
-			var duration string
-			if !job.StartedAt.IsZero() && !job.FinishedAt.IsZero() {
-				duration = fmt.Sprint(job.FinishedAt.Sub(job.StartedAt).Round(time.Second))
-			} else if !job.StartedAt.IsZero() {
-				duration = fmt.Sprint(time.Since(job.StartedAt).Round(time.Second)) + " (running)"
-			}
-
-			fmt.Println("ID:       ", job.ID)
-			fmt.Println("Image:    ", job.Image)
-			fmt.Println("Command:  ", strings.Join(job.Command, " "))
-			fmt.Println("Status:   ", job.Status)
-			fmt.Println("Attempt:  ", job.Attempt)
-			fmt.Println("ExitCode: ", job.ExitCode)
-			fmt.Println("Duration: ", duration)
-			fmt.Println("Error:    ", job.Error)
-			fmt.Println("--- output ---")
-			out := strings.TrimSpace(job.Output)
-			if out == "" {
-				fmt.Println("(no output)")
-			} else {
-				lines := strings.Split(out, "\n")
-				if len(lines) > 30 {
-					lines = lines[:30]
-				}
-				fmt.Println(strings.Join(lines, "\n"))
-				if len(lines) < len(strings.Split(out, "\n")) {
-					fmt.Println("... (truncated)")
-				}
-			}
+			writeJob(cmd.OutOrStdout(), job)
 			return nil
 		},
 	}
@@ -164,7 +160,7 @@ func cancelCmd() *cobra.Command {
 				return fmt.Errorf("save error: %w", err)
 			}
 
-			fmt.Println("cancelled job:", job.ID)
+			fmt.Fprintln(cmd.OutOrStdout(), "cancelled job:", job.ID)
 			return nil
 		},
 	}
@@ -175,14 +171,18 @@ func main() {
 	viper.SetDefault("redis_addr", "localhost:6379")
 
 	rootCmd := &cobra.Command{
-		Use: "spool",
+		Use:          "spool",
+		SilenceUsage: true,
 	}
 
 	rootCmd.AddCommand(runCmd())
 	rootCmd.AddCommand(statusCmd())
 	rootCmd.AddCommand(cancelCmd())
 
-	if err := rootCmd.Execute(); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		os.Exit(1)
 	}
 }

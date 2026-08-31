@@ -1,0 +1,91 @@
+version: '3'
+
+env:
+  REDIS_ADDR: '{{.REDIS_ADDR | default "localhost:6379"}}'
+  SPOOL_CONCURRENCY: '{{.SPOOL_CONCURRENCY | default "2"}}'
+
+tasks:
+  default:
+    desc: Show available commands
+    cmds:
+      - task --list
+    silent: true
+
+  dev:
+    desc: Start Redis and the worker; Ctrl+C stops the session
+    cmds:
+      - defer: docker compose down
+      - docker compose up -d --wait redis
+      - task: worker
+
+  dev:slack:
+    desc: Start Redis, the worker, and the Slack bot
+    requires:
+      vars: [SLACK_APP_TOKEN, SLACK_BOT_TOKEN]
+    cmds:
+      - defer: docker compose down
+      - docker compose up -d --wait redis
+      - task: services:slack
+
+  stop:
+    desc: Stop the development Redis container
+    cmds:
+      - docker compose down
+
+  run:
+    desc: 'Submit a job and wait for its result (task run -- --image alpine echo hello)'
+    cmds:
+      - go run ./cmd/cli run {{.CLI_ARGS}}
+
+  status:
+    desc: 'Show a job and its output (task status -- <job-id>)'
+    cmds:
+      - go run ./cmd/cli status {{.CLI_ARGS}}
+
+  cancel:
+    desc: 'Cancel a job (task cancel -- <job-id>)'
+    cmds:
+      - go run ./cmd/cli cancel {{.CLI_ARGS}}
+
+  build:
+    desc: Build all Go packages
+    cmds:
+      - go build ./...
+
+  test:
+    desc: Run all Go tests
+    cmds:
+      - go test ./...
+
+  vet:
+    desc: Check Go code for correctness issues
+    cmds:
+      - go vet ./...
+
+  fmt:
+    desc: Format all Go packages
+    cmds:
+      - go fmt ./...
+
+  check:
+    desc: Build, vet, and test the project
+    deps: [build, vet, test]
+
+  docker:build:
+    desc: Build the production worker image as spool
+    cmds:
+      - docker build -t spool .
+
+  worker:
+    internal: true
+    cmds:
+      - go run ./cmd/worker
+
+  bot:
+    internal: true
+    cmds:
+      - go run ./internal/bot/bot
+
+  services:slack:
+    internal: true
+    deps: [worker, bot]

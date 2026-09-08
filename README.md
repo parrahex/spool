@@ -1,9 +1,3 @@
-<p align="center">
-  <img src="mylogo.png" alt="Spool" width="200"/>
-</p>
-
-<h1 align="center">Spool</h1>
-
 <p align="center">Run Docker jobs from a CLI or a Slack channel.</p>
 
 <p align="center">
